@@ -4,7 +4,7 @@ import {
   resolveMessageActionDiscoveryForPlugin,
   resolveMessageActionDiscoveryChannelId,
   resolveCurrentChannelMessageToolDiscoveryAdapter,
-  __testing as messageActionTesting,
+  testing as messageActionTesting,
 } from "../channels/plugins/message-action-discovery.js";
 import {
   channelPluginHasNativeApprovalPromptUi,
@@ -134,23 +134,6 @@ export function resolveChannelMessageToolHints(params: {
     .filter(Boolean);
 }
 
-export function resolveChannelMessageToolCapabilities(params: {
-  cfg?: OpenClawConfig;
-  channel?: string | null;
-  accountId?: string | null;
-}): string[] {
-  const channelId = normalizeAnyChannelId(params.channel);
-  if (!channelId) {
-    return [];
-  }
-  const resolve = getChannelPlugin(channelId)?.agentPrompt?.messageToolCapabilities;
-  if (!resolve) {
-    return [];
-  }
-  const cfg = params.cfg ?? ({} as OpenClawConfig);
-  return normalizePromptCapabilities(resolve({ cfg, accountId: params.accountId }));
-}
-
 export function resolveChannelPromptCapabilities(params: {
   cfg?: OpenClawConfig;
   channel?: string | null;
@@ -199,8 +182,9 @@ export function resolveChannelReactionGuidance(params: {
   };
 }
 
-export const __testing = {
+export const testing = {
   resetLoggedListActionErrors() {
     messageActionTesting.resetLoggedMessageActionErrors();
   },
 };
+export { testing as __testing };

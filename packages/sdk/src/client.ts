@@ -4,6 +4,12 @@ import { normalizeGatewayEvent } from "./normalize.js";
 import { GatewayClientTransport, isConnectableTransport } from "./transport.js";
 import type {
   AgentRunParams,
+  ArtifactQuery,
+  ArtifactsDownloadResult,
+  ArtifactsGetResult,
+  ArtifactsListResult,
+  EnvironmentSummary,
+  EnvironmentsListResult,
   GatewayEvent,
   GatewayRequestOptions,
   OpenClawEvent,
@@ -14,6 +20,12 @@ import type {
   SessionCreateParams,
   SessionSendParams,
   SessionTarget,
+  TasksCancelResult,
+  TasksGetResult,
+  TasksListParams,
+  TasksListResult,
+  ToolInvokeParams,
+  ToolInvokeResult,
 } from "./types.js";
 
 const MAX_REPLAY_RUNS = 100;
@@ -42,10 +54,16 @@ function resolveGatewayUrl(options: OpenClawOptions): string | undefined {
 function runStatusFromWaitPayload(payload: unknown): RunResult["status"] {
   const record =
     typeof payload === "object" && payload !== null
-      ? (payload as { aborted?: unknown; status?: unknown; stopReason?: unknown })
+      ? (payload as Record<string, unknown> & { aborted?: unknown; status?: unknown })
       : {};
   const status = typeof record.status === "string" ? record.status.toLowerCase() : undefined;
   const stopReason = typeof record.stopReason === "string" ? record.stopReason.toLowerCase() : "";
+  const hasTerminalTimeoutMetadata =
+    readOptionalTimestamp(record.endedAt) !== undefined ||
+    readOptionalString(record.error) !== undefined ||
+    stopReason.length > 0 ||
+    typeof record.livenessState === "string" ||
+    record.yielded === true;
   if (
     status === "aborted" ||
     status === "cancelled" ||
@@ -55,6 +73,7 @@ function runStatusFromWaitPayload(payload: unknown): RunResult["status"] {
     stopReason === "cancelled" ||
     stopReason === "canceled" ||
     stopReason === "killed" ||
+    stopReason === "auth-revoked" ||
     stopReason === "rpc" ||
     stopReason === "user" ||
     (record.aborted === true && stopReason === "stop")
@@ -65,7 +84,12 @@ function runStatusFromWaitPayload(payload: unknown): RunResult["status"] {
     return "completed";
   }
   if (status === "timeout") {
-    if (stopReason === "timeout" || stopReason === "timed_out" || record.aborted === true) {
+    if (
+      stopReason === "timeout" ||
+      stopReason === "timed_out" ||
+      record.aborted === true ||
+      hasTerminalTimeoutMetadata
+    ) {
       return "timed_out";
     }
     return "accepted";
@@ -161,6 +185,106 @@ function buildAgentParams(params: AgentRunParams): Record<string, unknown> {
 
 function unsupportedGatewayApi(api: string): never {
   throw new Error(`${api} is not supported by the current OpenClaw Gateway yet`);
+}
+
+type ChatProjectionState = "delta" | "final";
+
+type ChatProjection = {
+  state: ChatProjectionState;
+  payload: Record<string, unknown>;
+};
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+function hasArtifactQueryScope(params: unknown): params is ArtifactQuery {
+  const record = asRecord(params);
+  return [record.sessionKey, record.runId, record.taskId].some(
+    (value) => typeof value === "string" && value.trim().length > 0,
+  );
+}
+
+function requireArtifactQueryScope(api: string, params: unknown): ArtifactQuery {
+  if (!hasArtifactQueryScope(params)) {
+    throw new Error(`${api} requires one of sessionKey, runId, or taskId`);
+  }
+  return params;
+}
+
+function readChatProjection(event: OpenClawEvent): ChatProjection | undefined {
+  const raw = event.raw;
+  if (event.type !== "raw" || raw?.event !== "chat") {
+    return undefined;
+  }
+  const payload = asRecord(raw.payload);
+  return payload.state === "delta" || payload.state === "final"
+    ? { state: payload.state, payload }
+    : undefined;
+}
+
+function readChatProjectionText(payload: Record<string, unknown>): string | undefined {
+  const message = asRecord(payload.message);
+  const content = message.content;
+  if (typeof content === "string") {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return undefined;
+  }
+  const text = content
+    .map((part) => {
+      const record = asRecord(part);
+      return record.type === "text" && typeof record.text === "string" ? record.text : "";
+    })
+    .join("");
+  return text.length > 0 ? text : undefined;
+}
+
+function readChatProjectionDeltaText(payload: Record<string, unknown>): string | undefined {
+  return typeof payload.deltaText === "string" ? payload.deltaText : undefined;
+}
+
+function readChatProjectionReplace(payload: Record<string, unknown>): boolean {
+  return payload.replace === true;
+}
+
+function isAssistantRunEvent(event: OpenClawEvent): boolean {
+  return event.type === "assistant.delta" || event.type === "assistant.message";
+}
+
+function isTerminalRunEvent(event: OpenClawEvent): boolean {
+  return (
+    event.type === "run.completed" ||
+    event.type === "run.failed" ||
+    event.type === "run.cancelled" ||
+    event.type === "run.timed_out"
+  );
+}
+
+function normalizeChatProjectionEvent(
+  event: OpenClawEvent,
+  projection: ChatProjection,
+  previousText: string | undefined,
+): OpenClawEvent {
+  const text = readChatProjectionText(projection.payload);
+  const deltaText = readChatProjectionDeltaText(projection.payload);
+  const hasPreviousText = previousText !== undefined;
+  const isReplacement = readChatProjectionReplace(projection.payload);
+  return {
+    ...event,
+    type: projection.state === "delta" ? "assistant.delta" : "run.completed",
+    data:
+      projection.state === "delta"
+        ? text !== undefined
+          ? {
+              text,
+              delta: hasPreviousText ? (deltaText ?? text) : text,
+              ...(isReplacement ? { replace: true } : {}),
+            }
+          : event.data
+        : { phase: "end", ...(text !== undefined ? { outputText: text } : {}) },
+  };
 }
 
 export class OpenClaw {
@@ -262,23 +386,58 @@ export class OpenClaw {
     filter?: (event: OpenClawEvent) => boolean,
   ): AsyncIterable<OpenClawEvent> {
     await this.connect();
-    const matches = (event: OpenClawEvent) => {
-      if (event.runId !== runId) {
-        return false;
+    const replayEvents = this.replaySnapshot(runId);
+    let hasCanonicalAssistantRunEvent = replayEvents.some(isAssistantRunEvent);
+    let hasTerminalRunEvent = replayEvents.some(isTerminalRunEvent);
+    let previousChatProjectionText: string | undefined;
+    const toRunStreamEvent = (event: OpenClawEvent): OpenClawEvent | undefined => {
+      const chatProjection = readChatProjection(event);
+      if (chatProjection?.state === "delta") {
+        if (hasCanonicalAssistantRunEvent) {
+          return undefined;
+        }
+        const runEvent = normalizeChatProjectionEvent(
+          event,
+          chatProjection,
+          previousChatProjectionText,
+        );
+        const text = readChatProjectionText(chatProjection.payload);
+        if (text !== undefined) {
+          previousChatProjectionText = text;
+        }
+        return runEvent;
       }
-      return filter ? filter(event) : true;
+      if (chatProjection?.state === "final") {
+        if (hasTerminalRunEvent) {
+          return undefined;
+        }
+        hasTerminalRunEvent = true;
+        return normalizeChatProjectionEvent(event, chatProjection, previousChatProjectionText);
+      }
+      if (isAssistantRunEvent(event)) {
+        hasCanonicalAssistantRunEvent = true;
+      }
+      if (isTerminalRunEvent(event)) {
+        hasTerminalRunEvent = true;
+      }
+      return event;
     };
+    const matches = (event: OpenClawEvent) => event.runId === runId;
     const liveSource = this.normalizedEvents.stream(matches, { replay: true });
     const live = liveSource[Symbol.asyncIterator]();
     let nextLive = live.next();
     const seen = new Set<string>();
     try {
-      for (const event of this.replaySnapshot(runId)) {
-        if (!matches(event) || seen.has(event.id)) {
+      for (const event of replayEvents) {
+        if (seen.has(event.id)) {
           continue;
         }
         seen.add(event.id);
-        yield event;
+        const runEvent = toRunStreamEvent(event);
+        if (!runEvent || (filter && !filter(runEvent))) {
+          continue;
+        }
+        yield runEvent;
       }
       while (true) {
         const next = await nextLive;
@@ -290,7 +449,11 @@ export class OpenClaw {
           continue;
         }
         seen.add(next.value.id);
-        yield next.value;
+        const runEvent = toRunStreamEvent(next.value);
+        if (!runEvent || (filter && !filter(runEvent))) {
+          continue;
+        }
+        yield runEvent;
       }
     } finally {
       await live.return?.();
@@ -575,19 +738,19 @@ export class TasksNamespace extends RpcNamespace {
     super(client, "tasks");
   }
 
-  async list(params?: unknown): Promise<unknown> {
-    void params;
-    return unsupportedGatewayApi("oc.tasks.list");
+  async list(params?: TasksListParams): Promise<TasksListResult> {
+    return await this.call("list", params);
   }
 
-  async get(taskId: string): Promise<unknown> {
-    void taskId;
-    return unsupportedGatewayApi("oc.tasks.get");
+  async get(taskId: string): Promise<TasksGetResult> {
+    return await this.call("get", { taskId });
   }
 
-  async cancel(taskId: string): Promise<unknown> {
-    void taskId;
-    return unsupportedGatewayApi("oc.tasks.cancel");
+  async cancel(taskId: string, options?: { reason?: string }): Promise<TasksCancelResult> {
+    return await this.call("cancel", {
+      taskId,
+      ...(options?.reason ? { reason: options.reason } : {}),
+    });
   }
 }
 
@@ -618,10 +781,15 @@ export class ToolsNamespace extends RpcNamespace {
     return await this.call("effective", params);
   }
 
-  async invoke(name: string, params?: unknown): Promise<unknown> {
-    void name;
-    void params;
-    return unsupportedGatewayApi("oc.tools.invoke");
+  async invoke(name: string, params?: ToolInvokeParams): Promise<ToolInvokeResult> {
+    return await this.call("invoke", {
+      name,
+      ...(params?.args ? { args: params.args } : {}),
+      ...(params?.sessionKey ? { sessionKey: params.sessionKey } : {}),
+      ...(params?.agentId ? { agentId: params.agentId } : {}),
+      ...(typeof params?.confirm === "boolean" ? { confirm: params.confirm } : {}),
+      ...(params?.idempotencyKey ? { idempotencyKey: params.idempotencyKey } : {}),
+    });
   }
 }
 
@@ -630,19 +798,22 @@ export class ArtifactsNamespace extends RpcNamespace {
     super(client, "artifacts");
   }
 
-  async list(params?: unknown): Promise<unknown> {
-    void params;
-    return unsupportedGatewayApi("oc.artifacts.list");
+  async list(params: ArtifactQuery): Promise<ArtifactsListResult> {
+    return await this.call("list", requireArtifactQueryScope("oc.artifacts.list", params));
   }
 
-  async get(id: string): Promise<unknown> {
-    void id;
-    return unsupportedGatewayApi("oc.artifacts.get");
+  async get(id: string, params: ArtifactQuery): Promise<ArtifactsGetResult> {
+    return await this.call("get", {
+      ...requireArtifactQueryScope("oc.artifacts.get", params),
+      artifactId: id,
+    });
   }
 
-  async download(id: string): Promise<unknown> {
-    void id;
-    return unsupportedGatewayApi("oc.artifacts.download");
+  async download(id: string, params: ArtifactQuery): Promise<ArtifactsDownloadResult> {
+    return await this.call("download", {
+      ...requireArtifactQueryScope("oc.artifacts.download", params),
+      artifactId: id,
+    });
   }
 }
 
@@ -663,9 +834,8 @@ export class EnvironmentsNamespace extends RpcNamespace {
     super(client, "environments");
   }
 
-  async list(params?: unknown): Promise<unknown> {
-    void params;
-    return unsupportedGatewayApi("oc.environments.list");
+  async list(params?: unknown): Promise<EnvironmentsListResult> {
+    return await this.call("list", params ?? {});
   }
 
   async create(params?: unknown): Promise<unknown> {
@@ -673,9 +843,8 @@ export class EnvironmentsNamespace extends RpcNamespace {
     return unsupportedGatewayApi("oc.environments.create");
   }
 
-  async status(environmentId: string): Promise<unknown> {
-    void environmentId;
-    return unsupportedGatewayApi("oc.environments.status");
+  async status(environmentId: string): Promise<EnvironmentSummary> {
+    return await this.call("status", { environmentId });
   }
 
   async delete(environmentId: string): Promise<unknown> {
