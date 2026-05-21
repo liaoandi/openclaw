@@ -1187,7 +1187,7 @@ describe("modelsAuthLoginCommand", () => {
     await modelsAuthPasteTokenCommand({ provider: "openai", token: " openai-token " }, runtime);
 
     expect(mocks.clackText).not.toHaveBeenCalled();
-    expect(mocks.upsertAuthProfile).toHaveBeenCalledWith({
+    expect(mocks.upsertAuthProfileWithLock).toHaveBeenCalledWith({
       profileId: "openai:manual",
       credential: {
         type: "token",
@@ -1201,11 +1201,12 @@ describe("modelsAuthLoginCommand", () => {
   it("rejects empty --token values before prompting", async () => {
     const runtime = createRuntime();
 
-    await expect(modelsAuthPasteTokenCommand({ provider: "openai", token: " " }, runtime)).rejects
-      .toThrow("--token value must not be empty");
+    await expect(
+      modelsAuthPasteTokenCommand({ provider: "openai", token: " " }, runtime),
+    ).rejects.toThrow("--token value must not be empty");
 
     expect(mocks.clackText).not.toHaveBeenCalled();
-    expect(mocks.upsertAuthProfile).not.toHaveBeenCalled();
+    expect(mocks.upsertAuthProfileWithLock).not.toHaveBeenCalled();
     expect(mocks.updateConfig).not.toHaveBeenCalled();
   });
 
