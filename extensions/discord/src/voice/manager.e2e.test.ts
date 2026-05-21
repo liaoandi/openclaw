@@ -244,6 +244,7 @@ vi.mock("../runtime.js", () => ({
 }));
 
 let managerModule: typeof import("./manager.js");
+let segmentModule: typeof import("./segment.js");
 
 function createVoiceChannelInfo(
   channelId: string,
@@ -299,7 +300,10 @@ function createRuntime() {
 
 describe("DiscordVoiceManager", () => {
   beforeAll(async () => {
-    managerModule = await import("./manager.js");
+    [managerModule, segmentModule] = await Promise.all([
+      import("./manager.js"),
+      import("./segment.js"),
+    ]);
   });
 
   beforeEach(() => {
@@ -518,24 +522,26 @@ describe("DiscordVoiceManager", () => {
     }) => Promise<void>;
   };
 
+  const createVoiceSegmentEntry = () => ({
+    guildId: "g1",
+    channelId: "1001",
+    sessionChannelId: "1001",
+    voiceSessionKey: "discord:g1:1001",
+    route: { sessionKey: "discord:g1:1001", agentId: "agent-1" },
+    connection: createConnectionMock(),
+    player: createAudioPlayerMock(),
+    playbackQueue: Promise.resolve(),
+    processingQueue: Promise.resolve(),
+    capture: createVoiceCaptureState(),
+    receiveRecovery: createVoiceReceiveRecoveryState(),
+  });
+
   const processVoiceSegment = async (
     manager: InstanceType<typeof managerModule.DiscordVoiceManager>,
     userId: string,
   ) =>
     await (manager as unknown as ProcessSegmentInvoker).processSegment({
-      entry: {
-        guildId: "g1",
-        channelId: "1001",
-        sessionChannelId: "1001",
-        voiceSessionKey: "discord:g1:1001",
-        route: { sessionKey: "discord:g1:1001", agentId: "agent-1" },
-        connection: createConnectionMock(),
-        player: createAudioPlayerMock(),
-        playbackQueue: Promise.resolve(),
-        processingQueue: Promise.resolve(),
-        capture: createVoiceCaptureState(),
-        receiveRecovery: createVoiceReceiveRecoveryState(),
-      },
+      entry: createVoiceSegmentEntry(),
       wavPath: "/tmp/test.wav",
       userId,
       durationSeconds: 1.2,
@@ -3540,7 +3546,19 @@ describe("DiscordVoiceManager", () => {
     const manager = createManager({ groupPolicy: "open" }, client, {
       commands: { useAccessGroups: false },
     });
-    await processVoiceSegment(manager, "u-guest");
+    const enqueuePlaybackMock = vi.fn();
+    await segmentModule.processDiscordVoiceSegment({
+      entry: createVoiceSegmentEntry(),
+      wavPath: "/tmp/test.wav",
+      userId: "u-guest",
+      durationSeconds: 1.2,
+      cfg: { commands: { useAccessGroups: false } },
+      discordConfig: { groupPolicy: "open" },
+      runtime: createRuntime(),
+      speakerContext: (manager as unknown as { speakerContext: unknown }).speakerContext as never,
+      fetchGuildName: async () => "Guild One",
+      enqueuePlayback: enqueuePlaybackMock,
+    });
 
     const commandArgs = lastAgentCommandArgs() as
       | { message?: string; messageChannel?: string; messageProvider?: string }
@@ -3552,6 +3570,7 @@ describe("DiscordVoiceManager", () => {
     expect(commandArgs?.message).toContain("repair obvious transcription artifacts");
     expect(lastTtsArgs().channel).toBe("discord");
     expect(lastTtsArgs().text).toBe("hello back");
+    expect(enqueuePlaybackMock).not.toHaveBeenCalled();
   });
 
   it("logs a bounded inbound transcript preview for voice debugging", async () => {
