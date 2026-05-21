@@ -399,7 +399,6 @@ export function registerModelsCli(program: Command) {
             expiresIn: opts.expiresIn as string | undefined,
             token: opts.token as string | undefined,
             agent,
-            token: opts.token as string | undefined,
           },
           defaultRuntime,
         );
