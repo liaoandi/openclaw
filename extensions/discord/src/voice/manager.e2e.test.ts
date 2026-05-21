@@ -534,6 +534,7 @@ describe("DiscordVoiceManager", () => {
     processingQueue: Promise.resolve(),
     capture: createVoiceCaptureState(),
     receiveRecovery: createVoiceReceiveRecoveryState(),
+    stop: vi.fn(),
   });
 
   const processVoiceSegment = async (
@@ -3531,7 +3532,7 @@ describe("DiscordVoiceManager", () => {
     textToSpeechMock.mockResolvedValueOnce({
       success: false,
       error: "skip playback in policy assertion",
-    });
+    } as never);
 
     const client = createClient();
     client.fetchMember.mockResolvedValue({
@@ -3548,7 +3549,7 @@ describe("DiscordVoiceManager", () => {
     });
     const enqueuePlaybackMock = vi.fn();
     await segmentModule.processDiscordVoiceSegment({
-      entry: createVoiceSegmentEntry(),
+      entry: createVoiceSegmentEntry() as never,
       wavPath: "/tmp/test.wav",
       userId: "u-guest",
       durationSeconds: 1.2,
