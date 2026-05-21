@@ -489,6 +489,7 @@ export async function modelsAuthPasteTokenCommand(
     expiresIn?: string;
     token?: string;
     agent?: string;
+    token?: string;
   },
   runtime: RuntimeEnv,
 ) {

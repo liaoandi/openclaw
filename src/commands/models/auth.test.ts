@@ -54,6 +54,7 @@ const mocks = vi.hoisted(() => ({
   logConfigUpdated: vi.fn(),
   openUrl: vi.fn(),
   isRemoteEnvironment: vi.fn(() => false),
+  validateAnthropicSetupToken: vi.fn<() => string | undefined>(() => undefined),
   loadAuthProfileStoreForRuntime: vi.fn(),
   listProfilesForProvider: vi.fn(),
   promoteAuthProfileInOrder: vi.fn(),
@@ -168,7 +169,7 @@ vi.mock("../../plugins/provider-oauth-flow.js", () => ({
 }));
 
 vi.mock("../auth-token.js", () => ({
-  validateAnthropicSetupToken: vi.fn(() => undefined),
+  validateAnthropicSetupToken: mocks.validateAnthropicSetupToken,
 }));
 
 vi.mock("../../plugins/provider-auth-choice-helpers.js", async (importOriginal) => {
@@ -326,6 +327,9 @@ describe("modelsAuthLoginCommand", () => {
     mocks.clackText.mockReset();
     mocks.upsertAuthProfileWithLock.mockReset();
     mocks.upsertAuthProfileWithLock.mockResolvedValue({ version: 1, profiles: {} });
+    mocks.validateAnthropicSetupToken.mockReset();
+    mocks.validateAnthropicSetupToken.mockReturnValue(undefined);
+    mocks.upsertAuthProfile.mockReset();
     mocks.promoteAuthProfileInOrder.mockReset();
 
     mocks.resolveDefaultAgentId.mockReturnValue("main");
@@ -1202,9 +1206,25 @@ describe("modelsAuthLoginCommand", () => {
     const runtime = createRuntime();
 
     await expect(
-      modelsAuthPasteTokenCommand({ provider: "openai", token: " " }, runtime),
+      modelsAuthPasteTokenCommand({ provider: "openai", token: "   " }, runtime),
     ).rejects.toThrow("--token value must not be empty");
 
+    expect(mocks.clackText).not.toHaveBeenCalled();
+    expect(mocks.upsertAuthProfileWithLock).not.toHaveBeenCalled();
+    expect(mocks.updateConfig).not.toHaveBeenCalled();
+  });
+
+  it("validates Anthropic --token values before persisting", async () => {
+    const runtime = createRuntime();
+    mocks.validateAnthropicSetupToken.mockReturnValue(
+      "Anthropic setup-token must start with sk-ant-oat01-",
+    );
+
+    await expect(
+      modelsAuthPasteTokenCommand({ provider: "anthropic", token: "not-anthropic" }, runtime),
+    ).rejects.toThrow("Anthropic setup-token must start with sk-ant-oat01-");
+
+    expect(mocks.validateAnthropicSetupToken).toHaveBeenCalledWith("not-anthropic");
     expect(mocks.clackText).not.toHaveBeenCalled();
     expect(mocks.upsertAuthProfileWithLock).not.toHaveBeenCalled();
     expect(mocks.updateConfig).not.toHaveBeenCalled();

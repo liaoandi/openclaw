@@ -384,7 +384,10 @@ export function registerModelsCli(program: Command) {
       "--expires-in <duration>",
       "Optional expiry duration (e.g. 365d, 12h). Stored as absolute expiresAt.",
     )
-    .option("--token <value>", "Token value (skip interactive prompt)")
+    .option(
+      "--token <value>",
+      "Token value (skip interactive prompt; may be exposed in shell history/process lists)",
+    )
     .action(async (opts, command) => {
       await withModelsRuntime(async ({ defaultRuntime, resolveModelAgentOption }) => {
         const agent = resolveModelAgentOption(command);
@@ -396,6 +399,7 @@ export function registerModelsCli(program: Command) {
             expiresIn: opts.expiresIn as string | undefined,
             token: opts.token as string | undefined,
             agent,
+            token: opts.token as string | undefined,
           },
           defaultRuntime,
         );
