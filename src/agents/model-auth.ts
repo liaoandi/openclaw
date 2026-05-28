@@ -48,7 +48,7 @@ import {
 } from "./model-auth-markers.js";
 import { type ResolvedProviderAuth } from "./model-auth-runtime-shared.js";
 import { normalizeProviderId } from "./model-selection.js";
-import { resolveProviderAuthAliasMap, resolveProviderIdForAuth } from "./provider-auth-aliases.js";
+import { resolveProviderIdForAuth } from "./provider-auth-aliases.js";
 
 export {
   ensureAuthProfileStore,
