@@ -30,7 +30,7 @@ export async function loadCopilotSdk(options: LoadCopilotSdkOptions = {}): Promi
 
   const promise = doLoad(options);
   if (useCache) {
-    cached = promise.catch((err) => {
+    cached = promise.catch((err: unknown) => {
       cached = undefined;
       throw err;
     });
@@ -85,14 +85,17 @@ function createMissingSdkError(
   const lines = [
     "[copilot] @github/copilot-sdk is not installed.",
     "",
-    "The Copilot agent runtime requires @github/copilot-sdk (~260 MB",
-    "after pulling its platform-specific @github/copilot CLI binary).",
-    "Install it once with:",
+    "The external @openclaw/copilot plugin depends on @github/copilot-sdk",
+    "(~260 MB after pulling its platform-specific @github/copilot CLI binary).",
+    "Reinstall the plugin once with:",
     "",
-    `  pnpm add ${COPILOT_SDK_SPEC}`,
-    `  # or: npm install ${COPILOT_SDK_SPEC}`,
+    "  openclaw plugins install @openclaw/copilot",
     "",
-    `Alternatively, install into the on-demand fallback location at\n  ${fallbackPath}`,
+    "For source checkouts or offline repair, install the SDK directly:",
+    "",
+    `  npm install ${COPILOT_SDK_SPEC}`,
+    "",
+    `The legacy fallback location is still probed at\n  ${fallbackPath}`,
     "",
     "Primary resolution error:",
     `  ${summarizeError(primaryErr)}`,

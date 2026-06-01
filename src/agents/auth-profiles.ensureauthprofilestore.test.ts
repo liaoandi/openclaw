@@ -42,7 +42,7 @@ vi.mock("./cli-credentials.js", () => ({
       }
       return {
         type: "oauth",
-        provider: "openai-codex",
+        provider: "openai",
         access,
         refresh,
         expires: Date.now() + 60 * 60 * 1000,
@@ -334,15 +334,15 @@ describe("ensureAuthProfileStore", () => {
     const { mainDir, agentDir, previousStateDir, previousAgentDir } =
       configureMainAuthTestDirs(root);
     try {
-      const freshProfileId = "openai-codex:user@example.com";
-      const staleProfileId = "openai-codex:default";
+      const freshProfileId = "openai:user@example.com";
+      const staleProfileId = "openai:default";
       saveAuthProfileStore(
         {
           version: AUTH_STORE_VERSION,
           profiles: {
             [freshProfileId]: {
               type: "oauth",
-              provider: "openai-codex",
+              provider: "openai",
               access: "main-access",
               refresh: "main-refresh",
               expires: Date.now() + 60 * 60 * 1000,
@@ -350,10 +350,10 @@ describe("ensureAuthProfileStore", () => {
             },
           },
           order: {
-            "openai-codex": [freshProfileId],
+            openai: [freshProfileId],
           },
           lastGood: {
-            "openai-codex": freshProfileId,
+            openai: freshProfileId,
           },
         },
         mainDir,
@@ -364,7 +364,7 @@ describe("ensureAuthProfileStore", () => {
           profiles: {
             [freshProfileId]: {
               type: "oauth",
-              provider: "openai-codex",
+              provider: "openai",
               access: "stale-identity-access",
               refresh: "stale-identity-refresh",
               expires: Date.now() - 30 * 60 * 1000,
@@ -372,7 +372,7 @@ describe("ensureAuthProfileStore", () => {
             },
             [staleProfileId]: {
               type: "oauth",
-              provider: "openai-codex",
+              provider: "openai",
               access: "stale-access",
               refresh: "stale-refresh",
               expires: Date.now() - 60 * 60 * 1000,
@@ -380,10 +380,10 @@ describe("ensureAuthProfileStore", () => {
             },
           },
           order: {
-            "openai-codex": [staleProfileId],
+            openai: [staleProfileId],
           },
           lastGood: {
-            "openai-codex": staleProfileId,
+            openai: staleProfileId,
           },
           usageStats: {
             [staleProfileId]: {
@@ -400,13 +400,13 @@ describe("ensureAuthProfileStore", () => {
 
       expectRecordFields(store.profiles[freshProfileId], {
         type: "oauth",
-        provider: "openai-codex",
+        provider: "openai",
         access: "main-access",
         refresh: "main-refresh",
       });
       expect(store.profiles[staleProfileId]).toBeUndefined();
-      expect(store.order?.["openai-codex"]).toEqual([freshProfileId]);
-      expect(store.lastGood?.["openai-codex"]).toBe(freshProfileId);
+      expect(store.order?.["openai"]).toEqual([freshProfileId]);
+      expect(store.lastGood?.["openai"]).toBe(freshProfileId);
       expect(store.usageStats?.[staleProfileId]).toBeUndefined();
 
       const persistedAgentStore = JSON.parse(
@@ -424,15 +424,15 @@ describe("ensureAuthProfileStore", () => {
     const { mainDir, agentDir, previousStateDir, previousAgentDir } =
       configureMainAuthTestDirs(root);
     try {
-      const freshProfileId = "openai-codex:user@example.com";
-      const staleProfileId = "openai-codex:default";
+      const freshProfileId = "openai:user@example.com";
+      const staleProfileId = "openai:default";
       saveAuthProfileStore(
         {
           version: AUTH_STORE_VERSION,
           profiles: {
             [freshProfileId]: {
               type: "oauth",
-              provider: "openai-codex",
+              provider: "openai",
               access: "older-main-access",
               refresh: "older-main-refresh",
               expires: Date.now() + 30 * 60 * 1000,
@@ -440,7 +440,7 @@ describe("ensureAuthProfileStore", () => {
             },
           },
           order: {
-            "openai-codex": [freshProfileId],
+            openai: [freshProfileId],
           },
         },
         mainDir,
@@ -451,7 +451,7 @@ describe("ensureAuthProfileStore", () => {
           profiles: {
             [freshProfileId]: {
               type: "oauth",
-              provider: "openai-codex",
+              provider: "openai",
               access: "newer-agent-access",
               refresh: "newer-agent-refresh",
               expires: Date.now() + 90 * 60 * 1000,
@@ -459,7 +459,7 @@ describe("ensureAuthProfileStore", () => {
             },
             [staleProfileId]: {
               type: "oauth",
-              provider: "openai-codex",
+              provider: "openai",
               access: "stale-access",
               refresh: "stale-refresh",
               expires: Date.now() - 60 * 60 * 1000,
@@ -467,10 +467,10 @@ describe("ensureAuthProfileStore", () => {
             },
           },
           order: {
-            "openai-codex": [staleProfileId],
+            openai: [staleProfileId],
           },
           lastGood: {
-            "openai-codex": staleProfileId,
+            openai: staleProfileId,
           },
         },
         agentDir,
@@ -481,13 +481,13 @@ describe("ensureAuthProfileStore", () => {
 
       expectRecordFields(store.profiles[freshProfileId], {
         type: "oauth",
-        provider: "openai-codex",
+        provider: "openai",
         access: "newer-agent-access",
         refresh: "newer-agent-refresh",
       });
       expect(store.profiles[staleProfileId]).toBeUndefined();
-      expect(store.order?.["openai-codex"]).toEqual([freshProfileId]);
-      expect(store.lastGood?.["openai-codex"]).toBe(freshProfileId);
+      expect(store.order?.["openai"]).toEqual([freshProfileId]);
+      expect(store.lastGood?.["openai"]).toBe(freshProfileId);
     } finally {
       restoreAgentDirEnv({ previousStateDir, previousAgentDir });
       fs.rmSync(root, { recursive: true, force: true });
@@ -499,15 +499,15 @@ describe("ensureAuthProfileStore", () => {
     const { mainDir, agentDir, previousStateDir, previousAgentDir } =
       configureMainAuthTestDirs(root);
     try {
-      const freshProfileId = "openai-codex:user@example.com";
-      const defaultProfileId = "openai-codex:default";
+      const freshProfileId = "openai:user@example.com";
+      const defaultProfileId = "openai:default";
       saveAuthProfileStore(
         {
           version: AUTH_STORE_VERSION,
           profiles: {
             [freshProfileId]: {
               type: "oauth",
-              provider: "openai-codex",
+              provider: "openai",
               access: "main-access",
               refresh: "main-refresh",
               expires: Date.now() + 60 * 60 * 1000,
@@ -515,14 +515,14 @@ describe("ensureAuthProfileStore", () => {
             },
             [defaultProfileId]: {
               type: "oauth",
-              provider: "openai-codex",
+              provider: "openai",
               access: "main-default-access",
               refresh: "main-default-refresh",
               expires: Date.now() + 45 * 60 * 1000,
             },
           },
           order: {
-            "openai-codex": [freshProfileId, defaultProfileId],
+            openai: [freshProfileId, defaultProfileId],
           },
           usageStats: {
             [defaultProfileId]: {
@@ -538,14 +538,14 @@ describe("ensureAuthProfileStore", () => {
           profiles: {
             [defaultProfileId]: {
               type: "oauth",
-              provider: "openai-codex",
+              provider: "openai",
               access: "stale-agent-default-access",
               refresh: "stale-agent-default-refresh",
               expires: Date.now() - 60 * 60 * 1000,
             },
           },
           order: {
-            "openai-codex": [defaultProfileId],
+            openai: [defaultProfileId],
           },
           usageStats: {
             [defaultProfileId]: {
@@ -560,10 +560,10 @@ describe("ensureAuthProfileStore", () => {
 
       const store = loadAuthProfileStoreForRuntime(agentDir, { readOnly: true });
 
-      expect(store.order?.["openai-codex"]).toEqual([freshProfileId, defaultProfileId]);
+      expect(store.order?.["openai"]).toEqual([freshProfileId, defaultProfileId]);
       expectRecordFields(store.profiles[defaultProfileId], {
         type: "oauth",
-        provider: "openai-codex",
+        provider: "openai",
         access: "main-default-access",
       });
       expectRecordFields(store.usageStats?.[defaultProfileId], {
@@ -580,15 +580,15 @@ describe("ensureAuthProfileStore", () => {
     const { mainDir, agentDir, previousStateDir, previousAgentDir } =
       configureMainAuthTestDirs(root);
     try {
-      const freshProfileId = "openai-codex:user@example.com";
-      const staleProfileId = "openai-codex:default";
+      const freshProfileId = "openai:user@example.com";
+      const staleProfileId = "openai:default";
       saveAuthProfileStore(
         {
           version: AUTH_STORE_VERSION,
           profiles: {
             [freshProfileId]: {
               type: "oauth",
-              provider: "openai-codex",
+              provider: "openai",
               access: "main-access",
               refresh: "main-refresh",
               expires: Date.now() + 60 * 60 * 1000,
@@ -604,7 +604,7 @@ describe("ensureAuthProfileStore", () => {
           profiles: {
             [staleProfileId]: {
               type: "oauth",
-              provider: "openai-codex",
+              provider: "openai",
               access: "other-access",
               refresh: "other-refresh",
               expires: Date.now() - 60 * 60 * 1000,
@@ -612,10 +612,10 @@ describe("ensureAuthProfileStore", () => {
             },
           },
           order: {
-            "openai-codex": [staleProfileId],
+            openai: [staleProfileId],
           },
           lastGood: {
-            "openai-codex": staleProfileId,
+            openai: staleProfileId,
           },
         },
         agentDir,
@@ -627,32 +627,32 @@ describe("ensureAuthProfileStore", () => {
       expect(store.profiles).toHaveProperty(freshProfileId);
       expectRecordFields(store.profiles[staleProfileId], {
         type: "oauth",
-        provider: "openai-codex",
+        provider: "openai",
         access: "other-access",
       });
-      expect(store.order?.["openai-codex"]).toEqual([staleProfileId]);
-      expect(store.lastGood?.["openai-codex"]).toBe(staleProfileId);
+      expect(store.order?.["openai"]).toEqual([staleProfileId]);
+      expect(store.lastGood?.["openai"]).toBe(staleProfileId);
     } finally {
       restoreAgentDirEnv({ previousStateDir, previousAgentDir });
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
 
-  it("rewrites invalidated per-agent Codex order to the main agent's healthy relogin profile", () => {
+  it("keeps an invalidated identity-specific agent profile when the main agent has a different identity", () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-auth-codex-relogin-"));
     const { mainDir, agentDir, previousStateDir, previousAgentDir } =
       configureMainAuthTestDirs(root);
     try {
       const now = Date.now();
-      const healthyProfileId = "openai-codex:bunsthedev@gmail.com";
-      const staleProfileId = "openai-codex:val@viewdue.ai";
+      const healthyProfileId = "openai:bunsthedev@gmail.com";
+      const staleProfileId = "openai:val@viewdue.ai";
       saveAuthProfileStore(
         {
           version: AUTH_STORE_VERSION,
           profiles: {
             [healthyProfileId]: {
               type: "oauth",
-              provider: "openai-codex",
+              provider: "openai",
               access: "healthy-access",
               refresh: "healthy-refresh",
               expires: now + 60 * 60 * 1000,
@@ -660,10 +660,10 @@ describe("ensureAuthProfileStore", () => {
             },
           },
           order: {
-            "openai-codex": [healthyProfileId],
+            openai: [healthyProfileId],
           },
           lastGood: {
-            "openai-codex": healthyProfileId,
+            openai: healthyProfileId,
           },
         },
         mainDir,
@@ -674,7 +674,7 @@ describe("ensureAuthProfileStore", () => {
           profiles: {
             [staleProfileId]: {
               type: "oauth",
-              provider: "openai-codex",
+              provider: "openai",
               access: "stale-access",
               refresh: "stale-refresh",
               expires: now + 30 * 60 * 1000,
@@ -682,10 +682,10 @@ describe("ensureAuthProfileStore", () => {
             },
           },
           order: {
-            "openai-codex": [staleProfileId],
+            openai: [staleProfileId],
           },
           lastGood: {
-            "openai-codex": staleProfileId,
+            openai: staleProfileId,
           },
           usageStats: {
             [staleProfileId]: {
@@ -705,13 +705,17 @@ describe("ensureAuthProfileStore", () => {
 
       expectRecordFields(store.profiles[healthyProfileId], {
         type: "oauth",
-        provider: "openai-codex",
+        provider: "openai",
         access: "healthy-access",
       });
-      expect(store.profiles[staleProfileId]).toBeUndefined();
-      expect(store.order?.["openai-codex"]).toEqual([healthyProfileId]);
-      expect(store.lastGood?.["openai-codex"]).toBe(healthyProfileId);
-      expect(store.usageStats?.[staleProfileId]).toBeUndefined();
+      expectRecordFields(store.profiles[staleProfileId], {
+        type: "oauth",
+        provider: "openai",
+        access: "stale-access",
+      });
+      expect(store.order?.["openai"]).toEqual([staleProfileId]);
+      expect(store.lastGood?.["openai"]).toBe(staleProfileId);
+      expect(store.usageStats?.[staleProfileId]?.cooldownReason).toBe("auth");
     } finally {
       restoreAgentDirEnv({ previousStateDir, previousAgentDir });
       fs.rmSync(root, { recursive: true, force: true });
@@ -852,7 +856,7 @@ describe("ensureAuthProfileStore", () => {
         path.join(oauthDir, "oauth.json"),
         `${JSON.stringify(
           {
-            "openai-codex": {
+            openai: {
               access: "access-token",
               refresh: "refresh-token",
               expires: Date.now() + 60_000,
@@ -870,9 +874,9 @@ describe("ensureAuthProfileStore", () => {
       clearRuntimeAuthProfileStoreSnapshots();
 
       const store = ensureAuthProfileStore(agentDir);
-      expectRecordFields(store.profiles["openai-codex:default"], {
+      expectRecordFields(store.profiles["openai:default"], {
         type: "oauth",
-        provider: "openai-codex",
+        provider: "openai",
         access: "access-token",
         refresh: "refresh-token",
       });
@@ -882,9 +886,9 @@ describe("ensureAuthProfileStore", () => {
       ) as {
         profiles: Record<string, Record<string, unknown>>;
       };
-      const persistedProfile = persisted.profiles["openai-codex:default"];
+      const persistedProfile = persisted.profiles["openai:default"];
       expect(persistedProfile?.type).toBe("oauth");
-      expect(persistedProfile?.provider).toBe("openai-codex");
+      expect(persistedProfile?.provider).toBe("openai");
       expect(persistedProfile?.access).toBe("access-token");
       expect(persistedProfile?.refresh).toBe("refresh-token");
       expect(persistedProfile).not.toHaveProperty("oauthRef");
@@ -996,9 +1000,9 @@ describe("ensureAuthProfileStore", () => {
           {
             version: AUTH_STORE_VERSION,
             profiles: {
-              "openai-codex:default": {
+              "openai:default": {
                 type: "oauth",
-                provider: "openai-codex",
+                provider: "openai",
                 access: "main-access",
                 refresh: "main-refresh",
                 expires: Date.now() + 60_000,
@@ -1015,9 +1019,9 @@ describe("ensureAuthProfileStore", () => {
 
       const store = ensureAuthProfileStore(workerAgentDir);
 
-      expectRecordFields(store.profiles["openai-codex:default"], {
+      expectRecordFields(store.profiles["openai:default"], {
         type: "oauth",
-        provider: "openai-codex",
+        provider: "openai",
         access: "main-access",
       });
       expect(fs.existsSync(workerStorePath)).toBe(false);
