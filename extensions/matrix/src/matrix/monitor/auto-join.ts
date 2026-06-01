@@ -59,8 +59,7 @@ export function registerMatrixAutoJoin(params: {
     return resolved.filter((roomId): roomId is string => Boolean(roomId));
   };
 
-  // Handle invites directly so both "always" and "allowlist" modes share the same path.
-  client.on("room.invite", (roomId: string, _inviteEvent: unknown) => {
+  const handleRoomInvite = (roomId: string, _inviteEvent: unknown) => {
     void (async () => {
       if (autoJoin === "allowlist") {
         const allowedAliasRoomIds = await resolveAllowedAliasRoomIds();
@@ -82,5 +81,8 @@ export function registerMatrixAutoJoin(params: {
         runtime.error?.(`matrix: failed to join room ${roomId}: ${String(err)}`);
       }
     })();
-  });
+  };
+
+  // Handle invites directly so both "always" and "allowlist" modes share the same path.
+  client.on("room.invite", handleRoomInvite);
 }
