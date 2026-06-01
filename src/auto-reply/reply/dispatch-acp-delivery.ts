@@ -1,13 +1,13 @@
+import {
+  normalizeOptionalLowercaseString,
+  normalizeOptionalString,
+} from "@openclaw/normalization-core/string-coerce";
 import { hasOutboundReplyContent } from "openclaw/plugin-sdk/reply-payload";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import type { TtsAutoMode } from "../../config/types.tts.js";
 import { logVerbose } from "../../globals.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { createLazyImportLoader } from "../../shared/lazy-promise.js";
-import {
-  normalizeOptionalLowercaseString,
-  normalizeOptionalString,
-} from "../../shared/string-coerce.js";
 import { createTtsDirectiveTextStreamCleaner } from "../../tts/directives.js";
 import { resolveStatusTtsSnapshot } from "../../tts/status-config.js";
 import { resolveConfiguredTtsMode, shouldCleanTtsDirectiveText } from "../../tts/tts-config.js";
@@ -273,7 +273,7 @@ export function createAcpDispatchDeliveryCoordinator(params: {
     if (params.suppressReplyLifecycle) {
       return;
     }
-    void Promise.resolve(params.onReplyStart?.()).catch((error) => {
+    void Promise.resolve(params.onReplyStart?.()).catch((error: unknown) => {
       logVerbose(
         `dispatch-acp: reply lifecycle start failed: ${error instanceof Error ? error.message : String(error)}`,
       );
