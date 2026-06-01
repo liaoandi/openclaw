@@ -19,6 +19,8 @@ const {
   loggerInfoMock,
   loggerWarnMock,
   loggerErrorMock,
+  abortAndDrainEmbeddedAgentRunMock,
+  retireSessionMcpRuntimeMock,
 } = vi.hoisted(() => ({
   enqueueSystemEventMock: vi.fn(),
   requestHeartbeatMock: vi.fn(),
@@ -38,6 +40,12 @@ const {
   loggerInfoMock: vi.fn(),
   loggerWarnMock: vi.fn(),
   loggerErrorMock: vi.fn(),
+  abortAndDrainEmbeddedAgentRunMock: vi.fn(async () => ({
+    aborted: true,
+    drained: true,
+    forceCleared: false,
+  })),
+  retireSessionMcpRuntimeMock: vi.fn(async () => true),
 }));
 
 function enqueueSystemEvent(...args: unknown[]) {
@@ -124,7 +132,15 @@ vi.mock("../logging.js", () => {
   };
 });
 
-import { readCronRunLogEntries, resolveCronRunLogPath } from "../cron/run-log.js";
+vi.mock("../agents/embedded-agent.js", () => ({
+  abortAndDrainEmbeddedAgentRun: abortAndDrainEmbeddedAgentRunMock,
+}));
+
+vi.mock("../agents/agent-bundle-mcp-tools.js", () => ({
+  retireSessionMcpRuntime: retireSessionMcpRuntimeMock,
+}));
+
+import { readCronRunLogEntries } from "../cron/run-log.js";
 import { buildGatewayCronService } from "./server-cron.js";
 
 function createCronConfig(name: string): OpenClawConfig {
@@ -225,6 +241,8 @@ describe("buildGatewayCronService", () => {
     cleanupBrowserSessionsForLifecycleEndMock.mockClear();
     runCronChangedMock.mockClear();
     getGlobalHookRunnerMock.mockClear();
+    abortAndDrainEmbeddedAgentRunMock.mockClear();
+    retireSessionMcpRuntimeMock.mockClear();
     getGlobalHookRunnerMock.mockReturnValue({
       hasHooks: (hookName: string) => hookName === "cron_changed",
       runCronChanged: runCronChangedMock,
@@ -543,12 +561,11 @@ describe("buildGatewayCronService", () => {
         "cron: possible ghost run; next-heartbeat systemEvent finished before confirmed agent processing",
       );
 
-      const entries = await readCronRunLogEntries(
-        resolveCronRunLogPath({
-          storePath: state.storePath,
-          jobId: job.id,
-        }),
-      );
+      const entries = await readCronRunLogEntries({
+        storePath: state.storePath,
+        jobId: job.id,
+        limit: 10,
+      });
       expect(entries).toContainEqual(
         expect.objectContaining({
           jobId: job.id,

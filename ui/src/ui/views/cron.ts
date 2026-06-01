@@ -1842,7 +1842,7 @@ function renderRun(
         : null;
   const warnings = (entry.warnings ?? []).filter((warning) => warning.trim().length > 0);
   const bodySource = entry.summary || entry.error || t("cron.runEntry.noSummary");
-  const showErrorInMeta = !!entry.error && !!entry.summary;
+  const showErrorInMeta = Boolean(entry.error) && Boolean(entry.summary);
   return html`
     <div class="list-item cron-run-entry">
       <div class="cron-run-entry__header">
