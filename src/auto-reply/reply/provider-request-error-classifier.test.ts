@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   classifyProviderRequestError,
   PROVIDER_CONVERSATION_STATE_ERROR_USER_MESSAGE,
+  PROVIDER_INVALID_ARGUMENT_USER_MESSAGE,
 } from "./provider-request-error-classifier.js";
 
 describe("provider request error classifier", () => {
@@ -33,5 +34,22 @@ describe("provider request error classifier", () => {
 
   it("ignores unrelated provider errors", () => {
     expect(classifyProviderRequestError(new Error("429: rate limit exceeded"))).toBeUndefined();
+  });
+
+  it("classifies LiteLLM Vertex beta invalid-argument rejections", () => {
+    const message =
+      'litellm.BadRequestError: Vertex_ai_betaException BadRequestError - b\'{"error":{"code":400,"message":"Request contains an invalid argument.","status":"INVALID_ARGUMENT"}}\'';
+
+    expect(classifyProviderRequestError(new Error(message))).toEqual({
+      code: "provider_invalid_argument",
+      userMessage: PROVIDER_INVALID_ARGUMENT_USER_MESSAGE,
+      technicalMessage: message,
+    });
+  });
+
+  it("does not treat generic INVALID_ARGUMENT text as a provider request-shape recovery", () => {
+    expect(
+      classifyProviderRequestError(new Error("INVALID_ARGUMENT: some other failure")),
+    ).toBeUndefined();
   });
 });

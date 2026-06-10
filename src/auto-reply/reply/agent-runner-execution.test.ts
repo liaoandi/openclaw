@@ -19,7 +19,10 @@ import {
   resolveRunAfterAutoFallbackPrimaryProbeRecheck,
 } from "./agent-runner-execution.js";
 import { HEARTBEAT_EXTERNAL_RUN_FAILURE_TEXT } from "./agent-runner-failure-copy.js";
-import { PROVIDER_CONVERSATION_STATE_ERROR_USER_MESSAGE } from "./provider-request-error-classifier.js";
+import {
+  PROVIDER_CONVERSATION_STATE_ERROR_USER_MESSAGE,
+  PROVIDER_INVALID_ARGUMENT_USER_MESSAGE,
+} from "./provider-request-error-classifier.js";
 import type { FollowupRun } from "./queue.js";
 import type { ReplyOperation } from "./reply-run-registry.js";
 import type { TypingSignaler } from "./typing-mode.js";
